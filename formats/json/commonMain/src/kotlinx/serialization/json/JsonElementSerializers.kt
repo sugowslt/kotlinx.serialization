@@ -118,17 +118,12 @@ private object JsonLiteralSerializer : KSerializer<JsonLiteral> {
             return encoder.encodeInline(value.coerceToInlineType).encodeString(value.content)
         }
 
-        // use .content instead of .longOrNull as latter can process exponential notation,
-        // and it should be delegated to double when encoding.
-        value.content.toLongOrNull()?.let { return encoder.encodeLong(it) }
-
-        // most unsigned values fit to .longOrNull, but not ULong
-        value.content.toULongOrNull()?.let {
-            encoder.encodeInline(ULong.serializer().descriptor).encodeLong(it.toLong())
-            return
+        value.content.toDoubleOrNull()?.let {
+            if (!it.isFinite() && value.content in specialFloatingPointValues) {
+                return encoder.encodeDouble(it)
+            }
+            return encoder.encodeInline(jsonUnquotedLiteralDescriptor).encodeString(value.content)
         }
-
-        value.content.toDoubleOrNull()?.let { return encoder.encodeDouble(it) }
         value.content.toBooleanStrictOrNull()?.let { return encoder.encodeBoolean(it) }
 
         encoder.encodeString(value.content)
@@ -143,6 +138,8 @@ private object JsonLiteralSerializer : KSerializer<JsonLiteral> {
         return result
     }
 }
+
+private val specialFloatingPointValues = setOf("NaN", "Infinity", "-Infinity")
 
 /**
  * Serializer object providing [SerializationStrategy] and [DeserializationStrategy] for [JsonObject].
